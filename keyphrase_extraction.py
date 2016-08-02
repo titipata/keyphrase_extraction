@@ -2,6 +2,9 @@
 
 import re
 import string
+import operator
+import numpy as np
+from unidecode import unidecode
 from nltk import word_tokenize, sent_tokenize
 from nltk import pos_tag_sents
 from nltk.chunk.regexp import RegexpParser
@@ -9,6 +12,7 @@ from nltk.chunk import tree2conlltags
 from nltk.corpus import stopwords
 from itertools import chain, groupby
 from operator import itemgetter
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 punct_re = re.compile('[{}]'.format(re.escape(string.punctuation)))
 stop_words = set(stopwords.words('english'))
@@ -35,6 +39,7 @@ def generate_candidate(texts, method='word', remove_punctuation=False):
         if remove_punctuation:
             sentence = punct_re.sub(' ', sentence) # remove punctuation
         words = word_tokenize(sentence)
+        words = list(map(lambda s: s.lower(), words))
         words_.append(words)
     tagged_words = pos_tag_sents(words_) # POS tagging
 
@@ -48,7 +53,7 @@ def generate_candidate(texts, method='word', remove_punctuation=False):
         grammar = r'KT: {(<JJ>* <NN.*>+ <IN>)? <JJ>* <NN.*>+}'
         chunker = RegexpParser(grammar)
         all_tag = chain.from_iterable([tree2conlltags(chunker.parse(tag)) for tag in tagged_words])
-        for key, group in groupby(all_tag, lambda (word, pos, chunk): chunk != 'O'):
+        for key, group in groupby(all_tag, lambda tag: tag[2] != 'O'):
             candidate = ' '.join([word for (word, pos, chunk) in group])
             if key is True and candidate not in stop_words:
                 candidates.append(candidate)
@@ -56,8 +61,51 @@ def generate_candidate(texts, method='word', remove_punctuation=False):
         print("Use either 'word' or 'phrase' in method")
     return candidates
 
+
+def keyphrase_extraction_tfidf(texts, method='phrase', min_df=5, max_df=0.8, num_key=5):
+    """
+    Use tf-idf weighting to score key phrases in list of given texts
+
+    Parameters
+    ----------
+    texts: list, list of texts (remove None and empty string)
+
+    Returns
+    -------
+    key_phrases: list, list of top key phrases that expain the article
+
+    """
+    print('generating vocabulary candidate...')
+    vocabulary = [generate_candidate(unidecode(text), method=method) for text in texts]
+    vocabulary = list(chain(*vocabulary))
+    vocabulary = list(np.unique(vocabulary)) # unique vocab
+    print('done!')
+
+    max_vocab_len = max(map(lambda s: len(s.split(' ')), vocabulary))
+    tfidf_model = TfidfVectorizer(vocabulary=vocabulary, lowercase=True,
+                                  ngram_range=(1,max_vocab_size), stop_words=None,
+                                  min_df=min_df, max_df=max_df)
+    X = tfidf_model.fit_transform(texts)
+    vocabulary_sort = [v[0] for v in sorted(tfidf_model.vocabulary_.items(),
+                                            key=operator.itemgetter(1))]
+    sorted_array = np.fliplr(np.argsort(X.toarray()))
+
+    # return list of top candidate phrase
+    key_phrases = list()
+    for sorted_array_doc in sorted_array:
+        key_phrase = [vocabulary_sort[e] for e in sorted_array_doc[0:num_key]]
+        key_phrases.append(key_phrase)
+
+    return key_phrases
+
+
 if __name__ == '__main__':
-    with open ("data/example.txt", "r") as f:
-        texts = f.read()
-    candidates = generate_candidate(texts, method='phrase')
-    print(candidates)
+    import pandas as pd
+    texts = list(pd.read_csv('data/example.txt')['abstract'])
+    key_phrases = keyphrase_extraction_tfidf(texts)
+    print('Few example key phrases candidate\n')
+    for _ in range(3):
+        num_doc = np.random.randint(0, len(key_phrases)-1)
+        print('abstract: %s' % texts[num_doc])
+        print(key_phrases[num_doc])
+        print('\n')
