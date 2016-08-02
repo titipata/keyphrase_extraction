@@ -83,7 +83,7 @@ def keyphrase_extraction_tfidf(texts, method='phrase', min_df=5, max_df=0.8, num
 
     max_vocab_len = max(map(lambda s: len(s.split(' ')), vocabulary))
     tfidf_model = TfidfVectorizer(vocabulary=vocabulary, lowercase=True,
-                                  ngram_range=(1,max_vocab_size), stop_words=None,
+                                  ngram_range=(1,max_vocab_len), stop_words=None,
                                   min_df=min_df, max_df=max_df)
     X = tfidf_model.fit_transform(texts)
     vocabulary_sort = [v[0] for v in sorted(tfidf_model.vocabulary_.items(),
