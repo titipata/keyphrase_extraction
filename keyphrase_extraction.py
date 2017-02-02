@@ -99,6 +99,21 @@ def keyphrase_extraction_tfidf(texts, method='phrase', min_df=5, max_df=0.8, num
     return key_phrases
 
 
+def freqeunt_terms_extraction(texts, ngram_range=(1,1), n_terms=None):
+    """
+    Extract frequent terms using simple TFIDF ranking in given list of texts
+    """
+    tfidf_model = TfidfVectorizer(lowercase=True,
+                                  ngram_range=ngram_range, stop_words=None,
+                                  min_df=5, max_df=0.8)
+    X = tfidf_model.fit_transform(texts)
+    vocabulary_sort = [v[0] for v in sorted(tfidf_model.vocabulary_.items(),
+                                            key=operator.itemgetter(1))]
+    ranks = np.array(np.argsort(X.sum(axis=0))).ravel()
+    frequent_terms = [vocabulary_sort[r] for r in ranks]
+    frequent_terms = [f for f in frequent_terms if len(f) > 3]
+    return frequent_terms_filter
+
 if __name__ == '__main__':
     import pandas as pd
     texts = list(pd.read_csv('data/example.txt')['abstract'])
